@@ -610,18 +610,18 @@ const SpaceMapComponent: React.FC = () => {
   );
 
   // Update trail points function
-  const updateTrailPoints = useCallback((deltaTime: number) => {
-    // Limit deltaTime to prevent trail from disappearing with uncapped FPS
-    const safeDeltaTime = Math.min(deltaTime, 33); // Cap at ~30 FPS equivalent
+  const updateTrailPoints = useCallback((deltaTimeMs: number) => {
+    const safeDeltaTimeMs = Math.min(deltaTimeMs, 33);
 
-    trailPointsRef.current.forEach((point) => {
-      point.life -= safeDeltaTime;
-    });
-
-    // Remove dead trail points
-    trailPointsRef.current = trailPointsRef.current.filter(
-      (point) => point.life > 0,
-    );
+    const newTrailPoints = [];
+    for (let i = 0; i < trailPointsRef.current.length; i++) {
+      const point = trailPointsRef.current[i];
+      point.life -= safeDeltaTimeMs;
+      if (point.life > 0) {
+        newTrailPoints.push(point);
+      }
+    }
+    trailPointsRef.current = newTrailPoints;
   }, []);
 
   // Draw trail function
@@ -1651,40 +1651,43 @@ const SpaceMapComponent: React.FC = () => {
     ctx.imageSmoothingEnabled = false; // Disable smoothing for pixel-perfect rendering
     ctx.globalCompositeOperation = "source-over"; // Default, most GPU-optimized blend mode
 
-    let lastTime = 0;
+    let lastTime = performance.now();
 
     const gameLoop = (currentTime: number) => {
-      // Stop game loop immediately if we're not on world screen
       if (currentScreen !== "world") {
+        if (gameLoopRef.current) {
+            cancelAnimationFrame(gameLoopRef.current);
+        }
         return;
       }
 
-      const deltaTime = currentTime - lastTime; // FPS desbloqueado - sem limitação
+      const deltaTime = (currentTime - lastTime) / 1000;
+      lastTime = currentTime;
 
-      // Calculate FPS less frequently for better performance
+      const MAX_DELTA_TIME = 0.1;
+      const clampedDeltaTime = Math.min(deltaTime, MAX_DELTA_TIME);
+
       if (fpsRef.current.lastTime > 0) {
         const frameTime = currentTime - fpsRef.current.lastTime;
         fpsRef.current.frameTimes.push(frameTime);
 
-        // Keep only last 30 frames for average (reduced from 60)
         if (fpsRef.current.frameTimes.length > 30) {
           fpsRef.current.frameTimes.shift();
         }
 
-        // Update FPS every 60 frames (less frequent)
         fpsRef.current.frameCount++;
         if (fpsRef.current.frameCount >= 60) {
           const avgFrameTime =
             fpsRef.current.frameTimes.reduce((a, b) => a + b, 0) /
             fpsRef.current.frameTimes.length;
-          const currentFps = Math.round(1000 / avgFrameTime);
-          setFps(currentFps);
+          if (avgFrameTime > 0) {
+            const currentFps = Math.round(1000 / avgFrameTime);
+            setFps(currentFps);
+          }
           fpsRef.current.frameCount = 0;
         }
       }
-
       fpsRef.current.lastTime = currentTime;
-      lastTime = currentTime;
 
       if (
         canvas.width !== canvas.offsetWidth ||
@@ -1845,8 +1848,7 @@ const SpaceMapComponent: React.FC = () => {
         lastTrailTime.current = currentTime;
       }
 
-      // Update trail points
-      updateTrailPoints(deltaTime);
+      updateTrailPoints(clampedDeltaTime * 1000);
 
       // Continue with game state update
       setGameState((prevState) => {
@@ -1971,48 +1973,30 @@ const SpaceMapComponent: React.FC = () => {
         .filter((pulse) => pulse.life > 0 && pulse.radius <= pulse.maxRadius);
 
       // Update stars with smooth floating motion - limited to 10 FPS
+      // STAR_UPDATE_INTERVAL é 200ms no código original que foi restaurado,
+      // o que significa 5 FPS para atualização de estrelas. Vamos manter isso por enquanto,
+      // mas otimizar os cálculos internos.
       if (currentTime - lastStarUpdateTime.current >= STAR_UPDATE_INTERVAL) {
         const stars = starsRef.current;
-        const time = currentTime * 0.0008; // Slower, more natural timing
+        const time = currentTime * 0.0007; // Ajuste fino na velocidade da animação (era 0.0008)
         const starsLength = stars.length;
 
         for (let i = 0; i < starsLength; i++) {
           const star = stars[i];
 
-          // Natural floating motion with multiple sine waves for organic movement
-          const baseSpeed = 0.8 + star.speed * 0.4; // More consistent speed range
+          const baseSpeed = 0.75 + star.speed * 0.35; // Ajustado (era 0.8 + star.speed * 0.4)
           const primaryTime = time * baseSpeed;
-          const secondaryTime = time * baseSpeed * 1.618; // Golden ratio for natural variation
 
-          // Layer multiple sine waves for more organic movement
-          const floatX =
-            Math.sin(primaryTime + star.floatPhase.x) *
-              star.floatAmplitude.x *
-              0.6 +
-            Math.sin(secondaryTime * 0.7 + star.floatPhase.x * 1.3) *
-              star.floatAmplitude.x *
-              0.3 +
-            Math.sin(primaryTime * 0.3 + star.floatPhase.x * 0.8) *
-              star.floatAmplitude.x *
-              0.1;
-
-          const floatY =
-            Math.cos(primaryTime * 0.8 + star.floatPhase.y) *
-              star.floatAmplitude.y *
-              0.6 +
-            Math.cos(secondaryTime * 0.6 + star.floatPhase.y * 1.2) *
-              star.floatAmplitude.y *
-              0.3 +
-            Math.cos(primaryTime * 0.4 + star.floatPhase.y * 0.9) *
-              star.floatAmplitude.y *
-              0.1;
+          // Otimização: Reduzir complexidade do float. Usar apenas uma onda senoidal por eixo.
+          const floatX = Math.sin(primaryTime + star.floatPhase.x) * star.floatAmplitude.x;
+          const floatY = Math.cos(primaryTime * 0.85 + star.floatPhase.y) * star.floatAmplitude.y; // Leve variação no Y
 
           star.x = normalizeCoord(star.baseX + floatX);
           star.y = normalizeCoord(star.baseY + floatY);
 
-          // Smoother twinkle and pulse updates
-          star.twinkle += star.speed * 0.4;
-          star.pulse += star.speed * 0.3;
+          // Twinkle e pulse otimizados (cálculos mais simples)
+          star.twinkle += star.speed * 0.35; // Ajuste fino (era 0.4)
+          star.pulse += star.speed * 0.25; // Ajuste fino (era 0.3)
         }
 
         lastStarUpdateTime.current = currentTime;
@@ -2042,27 +2026,19 @@ const SpaceMapComponent: React.FC = () => {
         }
       });
 
-      // Update projectiles with uncapped delta time for unlimited FPS
-      const currentFrameTime = performance.now();
-      const projectileDeltaTime =
-        (currentFrameTime - lastFrameTimeRef.current) / 1000;
-      lastFrameTimeRef.current = currentFrameTime;
-
-      // Use for loop for better performance than map/filter
       const projectiles = projectilesRef.current;
       for (let i = projectiles.length - 1; i >= 0; i--) {
         const proj = projectiles[i];
-        proj.x = normalizeCoord(proj.x + proj.vx * projectileDeltaTime);
-        proj.y = normalizeCoord(proj.y + proj.vy * projectileDeltaTime);
-        proj.life -= projectileDeltaTime;
+        proj.x = normalizeCoord(proj.x + proj.vx * clampedDeltaTime);
+        proj.y = normalizeCoord(proj.y + proj.vy * clampedDeltaTime);
+        proj.life -= clampedDeltaTime;
 
         if (proj.life <= 0) {
           projectiles.splice(i, 1);
         }
       }
 
-      // Update NPC ship
-      npcShip.updateShip(projectileDeltaTime * 1000); // Convert to milliseconds
+      npcShip.updateShip(clampedDeltaTime * 1000);
 
       // Create shooting stars less frequently for better performance
       if (
@@ -2184,7 +2160,7 @@ const SpaceMapComponent: React.FC = () => {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Render stars with optimized viewport culling
-      const renderBuffer = Math.min(RENDER_BUFFER, 100); // Reduce buffer for better performance
+      const renderBuffer = 100;
       const renderViewport = {
         left: -renderBuffer,
         right: canvas.width + renderBuffer,
@@ -2192,12 +2168,10 @@ const SpaceMapComponent: React.FC = () => {
         bottom: canvas.height + renderBuffer,
       };
 
-      // Batch stars by type for optimized rendering - pre-calculate size for performance
-      const starBatches = { normal: [], bright: [], giant: [] };
+      const starBatches: Record<"normal" | "bright" | "giant", Array<any>> = { normal: [], bright: [], giant: [] };
       const starArray = starsRef.current;
       const arrayLength = starArray.length;
 
-      // Use more aggressive culling and simplified calculations
       for (let i = 0; i < arrayLength; i++) {
         const star = starArray[i];
         const wrappedDeltaX = getWrappedDistance(star.x, gameState.camera.x);
@@ -2208,58 +2182,57 @@ const SpaceMapComponent: React.FC = () => {
         const screenX = centerX + parallaxX;
         const screenY = centerY + parallaxY;
 
-        // Tighter viewport check with early exit for performance
         if (
-          screenX >= renderViewport.left &&
-          screenX <= renderViewport.right &&
-          screenY >= renderViewport.top &&
-          screenY <= renderViewport.bottom
+          screenX < renderViewport.left ||
+          screenX > renderViewport.right ||
+          screenY < renderViewport.top ||
+          screenY > renderViewport.bottom
         ) {
-          // Simplified twinkling - less CPU intensive
-          const twinkleAlpha = Math.sin(star.twinkle) * 0.3 + 0.7;
-          const pulseSize =
-            star.type === "giant" ? Math.sin(star.pulse * 0.5) * 0.2 + 1 : 1;
-
-          let finalAlpha = star.opacity * twinkleAlpha;
-          let finalSize = star.size * pulseSize;
-
-          // Simplified type-based enhancements
-          if (star.type === "bright") {
-            finalAlpha *= 1.3;
-            finalSize *= 1.1;
-          } else if (star.type === "giant") {
-            finalAlpha *= 1.5;
-            finalSize *= 1.4;
-          }
-
-          starBatches[star.type].push({
-            x: Math.round(screenX),
-            y: Math.round(screenY),
-            size: finalSize,
-            alpha: finalAlpha,
-            color: star.color,
-            type: star.type,
-          });
+          continue;
         }
+
+        const twinkleValue = Math.sin(star.twinkle);
+        const twinkleAlphaFactor = 0.85 + twinkleValue * 0.15;
+
+        const pulseValue = Math.sin(star.pulse * 0.5);
+        const pulseSizeFactor = star.type === "giant" ? 1.0 + pulseValue * 0.15 : 1.0;
+
+        let finalAlpha = star.opacity * twinkleAlphaFactor;
+        let finalSize = star.size * pulseSizeFactor;
+
+        if (star.type === "bright") {
+          finalAlpha *= 1.2;
+          finalSize *= 1.05;
+        } else if (star.type === "giant") {
+          finalAlpha *= 1.4;
+          finalSize *= 1.3;
+        }
+
+        finalAlpha = Math.max(0, Math.min(1, finalAlpha));
+
+        starBatches[star.type].push({
+          x: Math.round(screenX),
+          y: Math.round(screenY),
+          size: finalSize,
+          alpha: finalAlpha,
+          color: star.color,
+          type: star.type,
+        });
       }
 
-      // Render batched stars (normal first, then bright, then giant for layering)
-      Object.keys(starBatches).forEach((type) => {
-        const batch = starBatches[type];
+      ["normal", "bright", "giant"].forEach((type) => {
+        const batch = starBatches[type as "normal" | "bright" | "giant"];
         for (let i = 0, len = batch.length; i < len; i++) {
-          const star = batch[i];
-          ctx.save();
-          ctx.globalAlpha = star.alpha;
+          const starData = batch[i];
           drawPureLightStar(
             ctx,
-            star.x,
-            star.y,
-            star.size,
-            star.color,
-            star.alpha,
-            star.type,
+            starData.x,
+            starData.y,
+            starData.size,
+            starData.color,
+            starData.alpha,
+            starData.type,
           );
-          ctx.restore();
         }
       });
 
