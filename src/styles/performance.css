@@ -1,0 +1,113 @@
+/* Otimizações agressivas para GPU */
+
+/* Forçar aceleração de hardware máxima para componentes críticos */
+.gpu-accelerated {
+  transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  contain: layout style paint;
+  isolation: isolate;
+}
+
+/* Otimizações específicas para canvas - forçar GPU */
+.game-canvas {
+  transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  will-change: transform, opacity;
+  image-rendering: optimizeSpeed;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: optimize-contrast;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  contain: strict;
+}
+
+/* Otimizações para animações - máxima aceleração GPU */
+.smooth-animation {
+  will-change: transform, opacity, filter;
+  transform: translate3d(0, 0, 0) scale3d(1, 1, 1) rotateZ(0deg);
+  -webkit-transform: translate3d(0, 0, 0) scale3d(1, 1, 1) rotateZ(0deg);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+/* Otimizações para text rendering */
+.optimized-text {
+  text-rendering: optimizeSpeed;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transform: translateZ(0);
+  will-change: contents;
+}
+
+/* Container otimizado para jogos - máxima GPU */
+.game-container {
+  contain: strict;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+/* Forçar composite layer para elementos críticos */
+.force-gpu-layer {
+  transform: translate3d(0, 0, 0) scale3d(1, 1, 1) rotateZ(0deg);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  isolation: isolate;
+  contain: layout style paint;
+}
+
+/* Otimizações específicas para HUD e UI overlay */
+.gpu-ui-overlay {
+  transform: translate3d(0, 0, 1px);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+/* Canvas rendering optimizations - uncapped FPS */
+.hardware-canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -o-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: optimizeSpeed;
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  /* No refresh rate limits - allow unlimited FPS */
+}
+
+/* Otimizações para scroll performance */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  contain: layout;
+}
+
+/* Reduzir repaints em elementos que mudam frequentemente */
+.no-repaint {
+  contain: layout style paint;
+  will-change: transform;
+}
+
+/* Otimizações para compositing layers */
+.composite-layer {
+  transform: translateZ(0);
+  will-change: transform;
+  isolation: isolate;
+}
